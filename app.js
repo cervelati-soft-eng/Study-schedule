@@ -1,3 +1,27 @@
+// 1. Importações dos módulos do Firebase via CDN
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// 2. Configurações do Firebase (COLE AS CHAVES DO SEU CONSOLE AQUI)
+const firebaseConfig = {
+  apiKey: "AIzaSyAq3Aa2x3XJp6I5MuNMfY5ebeTPAQv0tQg",
+  authDomain: "study-schedule-46ba6.firebaseapp.com",
+  projectId: "study-schedule-46ba6",
+  storageBucket: "study-schedule-46ba6.firebasestorage.app",
+  messagingSenderId: "33593254807",
+  appId: "1:33593254807:web:eb43e7f5b9e45124595ad2"
+};
+
+// Inicialização do Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+// Variáveis globais de controle de Estado do Usuário
+let currentUser = null;
+
 const STORAGE_KEY = "estudos-cronograma-v1";
 
 const DAYS = [
@@ -10,7 +34,6 @@ const DAYS = [
     { id: "dom", label: "Dom", full: "Domingo" },
 ];
 
-/** @type {Record<string, { id: string, time: string, topic: string }[]>} */
 const DEFAULT_SCHEDULE = {
     seg: [
         { id: "d1", time: "08:00", topic: "Revisão da semana anterior" },
@@ -28,7 +51,8 @@ function uid() {
     return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function loadSchedule() {
+// Carrega dados locais caso o usuário não esteja logado
+function loadLocalSchedule() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return cloneDefault();
@@ -48,14 +72,44 @@ function cloneDefault() {
     return JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
 }
 
-function saveSchedule(schedule) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
+// Salva localmente e também no Firestore (caso esteja logado)
+async function saveSchedule(scheduleData) {
+    // Sempre salva no localStorage como fallback
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(scheduleData));
+    
+    // Se logado, atualiza na nuvem
+    if (currentUser) {
+        try {
+            await setDoc(doc(db, "cronogramas", currentUser.uid), scheduleData);
+        } catch (error) {
+            console.error("Erro ao sincronizar com o Firebase:", error);
+        }
+    }
 }
 
-/** @type {Record<string, { id: string, time: string, topic: string }[]>} */
-let schedule = loadSchedule();
+// Sincroniza dados da Nuvem para o App
+async function loadFirebaseSchedule(userId) {
+    try {
+        const docRef = doc(db, "cronogramas", userId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return docSnap.data();
+        } else {
+            // Se o usuário logou pela 1ª vez e não tem dados na nuvem, envia o que ele tem localmente
+            const currentLocal = loadLocalSchedule();
+            await setDoc(docRef, currentLocal);
+            return currentLocal;
+        }
+    } catch (error) {
+        console.error("Erro ao buscar dados do Firebase:", error);
+        return loadLocalSchedule();
+    }
+}
+
+let schedule = loadLocalSchedule();
 let activeDayId = DAYS[0].id;
 
+// Elementos DOM existentes
 const dayTabsEl = document.getElementById("day-tabs");
 const titleEl = document.getElementById("current-day-title");
 const metaEl = document.getElementById("current-day-meta");
@@ -65,13 +119,20 @@ const inputTime = document.getElementById("input-time");
 const inputTopic = document.getElementById("input-topic");
 const btnReset = document.getElementById("btn-reset");
 
+// Novos Elementos DOM da Autenticação
+const btnLogin = document.getElementById("btn-login");
+const btnLogout = document.getElementById("btn-logout");
+const userInfo = document.getElementById("user-info");
+
 function timeToMinutes(t) {
     const [h, m] = t.split(":").map(Number);
     return h * 60 + m;
 }
 
 function sortDaySlots(dayId) {
-    schedule[dayId].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+    if (schedule[dayId]) {
+        schedule[dayId].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+    }
 }
 
 function renderTabs() {
@@ -110,7 +171,7 @@ function renderPanel() {
     }
 
     sortDaySlots(activeDayId);
-    for (const slot of schedule[activeDayId]) {
+    for (const slot of items) {
         const li = document.createElement("li");
         li.className = "slot";
         li.innerHTML = `
@@ -122,10 +183,10 @@ function renderPanel() {
     }
 
     listEl.querySelectorAll("[data-remove]").forEach((btn) => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
             const id = btn.getAttribute("data-remove");
             schedule[activeDayId] = schedule[activeDayId].filter((s) => s.id !== id);
-            saveSchedule(schedule);
+            await saveSchedule(schedule);
             renderPanel();
         });
     });
@@ -143,25 +204,66 @@ function escapeAttr(s) {
     return String(s).replace(/"/g, "&quot;");
 }
 
-formEl.addEventListener("submit", (e) => {
+formEl.addEventListener("submit", async (e) => {
     e.preventDefault();
     const time = inputTime.value;
     const topic = inputTopic.value.trim();
     if (!time || !topic) return;
+    
+    if (!schedule[activeDayId]) schedule[activeDayId] = [];
+    
     schedule[activeDayId].push({ id: uid(), time, topic });
-    saveSchedule(schedule);
+    await saveSchedule(schedule);
     inputTopic.value = "";
     inputTopic.focus();
     renderPanel();
 });
 
-btnReset.addEventListener("click", () => {
+btnReset.addEventListener("click", async () => {
     if (!confirm("Substituir o cronograma pelo exemplo inicial? Seus dados atuais serão perdidos.")) return;
     schedule = cloneDefault();
-    saveSchedule(schedule);
+    await saveSchedule(schedule);
     renderPanel();
     renderTabs();
 });
 
-renderTabs();
-renderPanel();
+// Eventos de Autenticação do Usuário
+btnLogin.addEventListener("click", async () => {
+    try {
+        await signInWithPopup(auth, provider);
+    } catch (error) {
+        console.error("Erro ao autenticar:", error);
+    }
+});
+
+btnLogout.addEventListener("click", async () => {
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error("Erro ao deslogar:", error);
+    }
+});
+
+// Observador de Mudança de Estado de Login (Firebase Auth Observer)
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        currentUser = user;
+        userInfo.textContent = `Olá, ${user.displayName || user.email}`;
+        userInfo.style.display = "inline";
+        btnLogin.style.display = "none";
+        btnLogout.style.display = "inline";
+        
+        // Carrega dados sincronizados da conta dele
+        schedule = await loadFirebaseSchedule(user.uid);
+    } else {
+        currentUser = null;
+        userInfo.style.display = "none";
+        btnLogin.style.display = "inline";
+        btnLogout.style.display = "none";
+        
+        // Retorna para o localStorage local padrão
+        schedule = loadLocalSchedule();
+    }
+    renderTabs();
+    renderPanel();
+});

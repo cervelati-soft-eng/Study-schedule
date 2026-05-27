@@ -15,9 +15,12 @@
         <header class="header">
             <div class="header-text">
                 <h1>Cronograma de estudos</h1>
-                <p class="subtitle">Escolha o dia e organize seus blocos de estudo.</p>
+                <p class="subtitle">Escolha o dia, organize seus blocos e sincronize com Firebase.</p>
             </div>
             <div class="header-actions">
+                <span id="user-info" style="display: none;"></span>
+                <button type="button" class="btn btn-ghost" id="btn-login">Entrar com Google</button>
+                <button type="button" class="btn btn-ghost" id="btn-logout" style="display: none;">Sair</button>
                 <button type="button" class="btn btn-ghost" id="btn-reset" title="Restaurar exemplo inicial">Restaurar exemplo</button>
             </div>
         </header>
@@ -44,9 +47,9 @@
         </main>
 
         <footer class="footer">
-            <p>Os dados ficam salvos neste navegador (local).</p>
+            <p>Dados salvos localmente e sincronizados na nuvem quando houver login.</p>
         </footer>
     </div>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
