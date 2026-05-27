@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cronograma de estudos por dia da semana">
+    <title>Cronograma de Estudos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="header-text">
+                <h1>Cronograma de estudos</h1>
+                <p class="subtitle">Escolha o dia e organize seus blocos de estudo.</p>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="btn btn-ghost" id="btn-reset" title="Restaurar exemplo inicial">Restaurar exemplo</button>
+            </div>
+        </header>
+
+        <nav class="days" id="day-tabs" aria-label="Dias da semana"></nav>
+
+        <main class="panel" aria-live="polite">
+            <div class="panel-head">
+                <h2 id="current-day-title">Segunda-feira</h2>
+                <p class="panel-meta" id="current-day-meta">0 blocos</p>
+            </div>
+
+            <ul class="slots" id="slot-list"></ul>
+
+            <form class="add-form" id="add-form" autocomplete="off">
+                <div class="add-row">
+                    <label class="sr-only" for="input-time">Horário</label>
+                    <input type="time" id="input-time" required value="19:00">
+                    <label class="sr-only" for="input-topic">Conteúdo</label>
+                    <input type="text" id="input-topic" placeholder="Matéria ou tópico" required maxlength="120">
+                    <button type="submit" class="btn btn-primary">Adicionar</button>
+                </div>
+            </form>
+        </main>
+
+        <footer class="footer">
+            <p>Os dados ficam salvos neste navegador (local).</p>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
